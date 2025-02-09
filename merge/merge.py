@@ -255,7 +255,9 @@ def write_reflection_dat(output_file, output_asm_file):
         f.write("\n_reflection_dat_end:\n")
 
         f.write("\n#ifdef __GNUC__\n")
+        f.write("\n#ifndef __APPLE__\n")
         f.write("    .section .note.GNU-stack,\"\",@progbits\n")
+        f.write("#endif\n")
         f.write("#endif\n")
 
 
