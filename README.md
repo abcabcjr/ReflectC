@@ -94,7 +94,7 @@ int main() {
 
     for (const field_info_t* field = reflect_field_info_iter_begin(struct_type); field != reflect_field_info_iter_end(struct_type); field++) {
         // Iterate through the fields of a struct
-        // Nested fields are also includes (e.g. nested.a.b)
+        // Nested fields are also included (e.g. nested.a.b)
         printf("%s : %s\n", field->name, field->type_ptr->name);
     }
 
