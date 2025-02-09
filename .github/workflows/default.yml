@@ -1,0 +1,53 @@
+name: Build and Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Cache Dependencies
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            clang cmake ninja-build python3 llvm-18 clang-18 libclang-18-dev \
+            zlib1g-dev libzstd-dev libcurl4-openssl-dev libedit-dev libxml2-dev || true
+
+      - name: Cache CMake Build
+        uses: actions/cache@v3
+        with:
+          path: build
+          key: ${{ runner.os }}-cmake-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cmake-
+
+      - name: Build Clang Plugin
+        run: |
+          mkdir -p plugin/build
+          cd plugin/build
+          cmake .. -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
+          cmake --build . -- -j$(nproc)
+          cd ../..
+
+      - name: Build Reflection Library
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
+          cmake --build . -- -j$(nproc)
