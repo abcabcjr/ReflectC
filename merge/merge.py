@@ -233,23 +233,30 @@ def write_reflection_dat(output_file, output_asm_file):
 
     # For linking reflection.dat directly with binary
     with open(output_asm_file, "w") as f:
-        # No idea if this is right but it works on macos....
-        f.write(f"#ifdef __APPLE__\n")
-        f.write(f".section __TEXT,__const\n")
-        f.write(f"#else\n")
-        f.write(f".section .rodata\n")
-        f.write(f"#endif\n")
-        f.write(f".global _reflection_dat_start\n")
-        f.write(f".global _reflection_dat_end\n")
-        f.write(f"_reflection_dat_start:\n")
+        f.write("#ifdef __APPLE__\n")
+        f.write("    .section __TEXT,__const\n")
+        f.write("#elif defined(_WIN32)\n")
+        f.write("    .section .rdata\n")  # Read-only data section on Windows (MinGW, MSVC)
+        f.write("#else\n")
+        f.write("    .section .rodata\n")  # Read-only data section on Linux
+        f.write("#endif\n\n")
+
+        f.write("    .global _reflection_dat_start\n")
+        f.write("    .global _reflection_dat_end\n")
+        f.write("_reflection_dat_start:\n")
 
         for i, byte in enumerate(writer.data[:writer.offset]):
             if i % 12 == 0:
                 f.write("\n    .byte ")
-            if i % 12 == 11 or (writer.offset - 1 == i):
-                f.write(f"0x{byte:02x} ")
-            else:
-                f.write(f"0x{byte:02x}, ")
+            f.write(f"0x{byte:02x}")
+            if i % 12 != 11 and (i != writer.offset - 1):
+                f.write(", ")
+
+        f.write("\n_reflection_dat_end:\n")
+
+        f.write("\n#ifdef __GNUC__\n")
+        f.write("    .section .note.GNU-stack,\"\",@progbits\n")
+        f.write("#endif\n")
 
 
 def main():
