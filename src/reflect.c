@@ -120,12 +120,19 @@ void add_enum_field_type(type_info_t* enum_type, const char* field_name, size_t 
     });
 }
 
-void reflect_load_bytes(char* reflection_metadata) {
+// copy - will allocate new strings, recommended if reading yourself from a file so you can free buffer
+void reflect_load_bytes(char* reflection_metadata, bool copy) {
     if (is_init)
         return;
 
     is_init = true;
-    reader_t reader = { .data = reflection_metadata, .offset = 0 };
+    reader_t reader = { .data = reflection_metadata, .offset = 0, .copy = copy };
+
+    // unused
+    const size_t global_string_volume_offset = read_size_t(&reader);
+
+    const size_t type_table_offset = read_size_t(&reader);
+    reader.offset = type_table_offset;
 
     const size_t type_count = read_size_t(&reader);
 
@@ -179,7 +186,7 @@ extern __attribute__((weak)) const char _reflection_dat_start[] = "";
 #endif
 
 void reflect_load() {
-    reflect_load_bytes(REFLECTION_DATA_SYMBOL);
+    reflect_load_bytes(REFLECTION_DATA_SYMBOL, false);
 }
 
 const type_info_t* reflect_type_info_from_name(const char* name) {

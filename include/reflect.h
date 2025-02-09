@@ -42,7 +42,7 @@ typedef union {
 } base_field_info_t;
 
 void reflect_load();
-void reflect_load_bytes(char* reflection_metadata);
+void reflect_load_bytes(char* reflection_metadata, bool copy);
 
 void* reflect_alloc(const type_info_t* type, void* allocator, void*(*alloc)(void*, size_t));
 void reflect_free(void* ptr, void* allocator, void (*free_func)(void*, void*));
