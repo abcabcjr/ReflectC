@@ -5,7 +5,8 @@
 
 typedef enum {
     ENUM_ONE = 1,
-    ENUM_TWO = 2
+    ENUM_TWO = 2,
+    ENUM_THREE = 3
 } enum_test_t;
 
 typedef struct {

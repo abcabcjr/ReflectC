@@ -40,8 +40,8 @@ public:
 class FieldInfo {
 public:
     FieldInfo(std::string name, std::string type, size_t offset)
-        : Name(std::move(name)), Type(std::move(type)), Offset(offset), PointerDepth(0), ArraySize(0),
-          IsConst(false), IsStructOrUnion(false) {
+        : Name(std::move(name)), Type(std::move(type)), Offset(offset),
+          PointerDepth(0), ArraySize(0), IsConst(false), IsStructOrUnion(false) {
     }
 
     std::string Name;
@@ -61,22 +61,26 @@ public:
         : BaseType(variant, name, size, typeId), RD(nullptr) {
     }
 
-    void AddField(const FieldInfo &field) { Fields.push_back(field); }
+    void AddField(const FieldInfo &field) {
+        Fields.push_back(field);
+    }
+
     std::vector<FieldInfo> Fields;
     const RecordDecl *RD;
 };
 
 class EnumInfo : public BaseType {
 public:
-    EnumInfo(const std::string &name, size_t size, size_t typeId)
-        : BaseType(TypeVariant::Enum, name, size, typeId) {
+    EnumInfo(const EnumDecl *ED, const std::string &name, size_t size, size_t typeId)
+        : BaseType(TypeVariant::Enum, name, size, typeId), ED(ED) {
     }
 
     void AddEnumerator(const std::string &name, int64_t value) {
         Enumerators.emplace_back(name, value);
     }
 
-    std::vector<std::pair<std::string, int64_t> > Enumerators;
+    const EnumDecl *ED;
+    std::vector<std::pair<std::string, int64_t>> Enumerators;
 };
 
 class ReflectClangVisitor : public RecursiveASTVisitor<ReflectClangVisitor> {
@@ -95,21 +99,24 @@ public:
 
         std::string recName = RD->getNameAsString();
         if (recName.empty()) {
-            if (TypedefNameDecl *tnd = RD->getTypedefNameForAnonDecl())
+            if (TypedefNameDecl *tnd = RD->getTypedefNameForAnonDecl()) {
                 recName = tnd->getNameAsString();
-            else {
+            } else {
                 llvm::errs() << "Record name is empty and no typedef alias available.\n";
                 return true;
             }
-        } {
+        }
+
+        {
             std::lock_guard<std::mutex> lock(TypeIDMutex);
+
             RecordInfo record(variant, recName, layout.getSize().getQuantity(), NextTypeID++);
-            record.RD = cast<RecordDecl>(RD->getCanonicalDecl());
+            record.RD = llvm::cast<RecordDecl>(RD->getCanonicalDecl());
+
             MergePendingAliasesFor(record.RD, record);
-            AddToTypeIDMap(record);
 
             unsigned index = 0;
-            for (const FieldDecl *field: RD->fields()) {
+            for (const FieldDecl *field : RD->fields()) {
                 QualType fieldType = field->getType();
                 FieldInfo fi = CreateFieldInfo(field, fieldType, layout.getFieldOffset(index) / 8);
 
@@ -118,6 +125,7 @@ public:
                         llvm::errs() << "Warning: Adding unknown base type: " << fi.Type << " with size 0\n";
                         RegisterBaseType(fi.Type, 0, false);
                     }
+                    
                     if (!fi.Alias.empty() && fi.Alias != fi.Type) {
                         if (BaseTypes.find(fi.Alias) == BaseTypes.end()) {
                             size_t size = 0;
@@ -136,12 +144,13 @@ public:
                 if (const RecordType *RT = fieldType->getAs<RecordType>()) {
                     RecordDecl *nestedRD = RT->getDecl();
                     if (nestedRD->isCompleteDefinition()) {
-                        ReflectNestedFields(nestedRD, field->getNameAsString() + ".", record,
-                                            layout.getFieldOffset(index) / 8);
+                        ReflectNestedFields(nestedRD, field->getNameAsString() + ".",
+                                            record, layout.getFieldOffset(index) / 8);
                     }
                 }
                 ++index;
             }
+
             Results.push_back(record);
             BaseTypes.emplace(record.Name, record);
         }
@@ -153,50 +162,67 @@ public:
             return true;
 
         std::lock_guard<std::mutex> lock(TypeIDMutex);
-        const QualType enumType = Context.getTypeDeclType(ED);
+
+        std::string enumName = ED->getNameAsString();
+        if (enumName.empty()) {
+            if (const TypedefNameDecl *Typedef = ED->getTypedefNameForAnonDecl()) {
+                enumName = Typedef->getNameAsString();
+            }
+        }
+
+        if (enumName.empty()) {
+            llvm::errs() << "Warning: Enum has no name and no typedef alias.\n";
+            return true;
+        }
+
+        QualType enumType = Context.getTypeDeclType(ED);
         size_t enumSize = Context.getTypeSizeInChars(enumType).getQuantity();
 
-        EnumInfo en(ED->getNameAsString(), enumSize, NextTypeID++);
-        for (const auto *e: ED->enumerators())
+        EnumInfo en(ED->getCanonicalDecl(), enumName, enumSize, NextTypeID++);
+        MergePendingAliasesFor(ED->getCanonicalDecl(), en);
+
+        for (const auto *e : ED->enumerators()) {
             en.AddEnumerator(e->getNameAsString(), e->getInitVal().getExtValue());
+        }
+
         EnumResults.push_back(en);
-        BaseTypes.emplace(en.Name, en);
+        BaseTypes.emplace(enumName, en);
+
         return true;
     }
 
     bool VisitTypedefDecl(const TypedefDecl *TD) {
-        QualType underlying = TD->getUnderlyingType();
-        QualType canon = underlying.getCanonicalType();
-        std::string aliasName = TD->getNameAsString();
-        if (const RecordType *RT = canon->getAs<RecordType>()) {
-            auto *rd = cast<RecordDecl>(RT->getDecl()->getCanonicalDecl());
-            PendingAliases[rd].push_back(aliasName);
+        const QualType underlying = TD->getUnderlyingType();
+        const QualType canon = underlying.getCanonicalType();
+
+        if (const auto *TT = canon->getAs<TagType>()) {
+            const TagDecl *tag = TT->getDecl()->getCanonicalDecl();
+            PendingAliases[tag].push_back(TD->getNameAsString());
         }
         return true;
     }
 
-    // Add pending aliases for a record to the record itself
-    void MergePendingAliasesFor(const RecordDecl *canonRD, RecordInfo &record) {
-        auto it = PendingAliases.find(canonRD);
-        if (it != PendingAliases.end()) {
-            for (const auto &alias: it->second) {
-                if (std::find(record.Aliases.begin(), record.Aliases.end(), alias) == record.Aliases.end())
-                    record.Aliases.push_back(alias);
-            }
-            PendingAliases.erase(it);
-        }
-    }
-
-    // Add pending aliases leftover after visits
     void MergePendingAliases() {
-        for (auto &pair: PendingAliases) {
-            const RecordDecl *canonRD = pair.first;
+        for (auto &pair : PendingAliases) {
+            const TagDecl *canonTD = pair.first;
             const std::vector<std::string> &aliases = pair.second;
-            for (auto &record: Results) {
-                if (record.RD == canonRD) {
-                    for (const auto &alias: aliases) {
-                        if (std::find(record.Aliases.begin(), record.Aliases.end(), alias) == record.Aliases.end())
+
+            for (auto &record : Results) {
+                if (record.RD == canonTD) {
+                    for (const auto &alias : aliases) {
+                        if (std::find(record.Aliases.begin(), record.Aliases.end(), alias) == record.Aliases.end()) {
                             record.Aliases.push_back(alias);
+                        }
+                    }
+                }
+            }
+
+            for (auto &en : EnumResults) {
+                if (en.ED == canonTD) {
+                    for (const auto &alias : aliases) {
+                        if (std::find(en.Aliases.begin(), en.Aliases.end(), alias) == en.Aliases.end()) {
+                            en.Aliases.push_back(alias);
+                        }
                     }
                 }
             }
@@ -207,12 +233,20 @@ public:
     void ReflectNestedFields(const RecordDecl *nestedRD, const std::string &prefix,
                              RecordInfo &record, size_t baseOffset);
 
-    const std::vector<RecordInfo> &GetResults() const { return Results; }
-    const std::unordered_map<size_t, BaseType> &GetTypeIDMap() const { return TypeIDMap; }
-    const std::unordered_map<std::string, BaseType> &GetBaseTypes() const { return BaseTypes; }
-    const std::vector<EnumInfo> &GetEnumResults() const { return EnumResults; }
+    const std::vector<RecordInfo> &GetResults() const {
+        return Results;
+    }
 
-    FieldInfo CreateFieldInfo(const FieldDecl *field, QualType fieldType, size_t Offset) const {
+    const std::vector<EnumInfo> &GetEnumResults() const {
+        return EnumResults;
+    }
+
+    const std::unordered_map<std::string, BaseType> &GetBaseTypes() const {
+        return BaseTypes;
+    }
+
+private:
+    FieldInfo CreateFieldInfo(const FieldDecl *field, QualType fieldType, size_t offset) const {
         std::string aliasName;
         if (field->getTypeSourceInfo()) {
             TypeLoc tl = field->getTypeSourceInfo()->getTypeLoc();
@@ -230,20 +264,17 @@ public:
         }
 
         QualType canonicalType = fieldType.getDesugaredType(Context);
-
         int pointerDepth = 0;
         uint64_t totalElements = 1;
         QualType underlyingType;
 
-        // Array logic
         if (const ConstantArrayType *cat = Context.getAsConstantArrayType(canonicalType)) {
             QualType arrType = canonicalType;
-            while (const ConstantArrayType *cat = Context.getAsConstantArrayType(arrType)) {
-                totalElements *= cat->getSize().getZExtValue();
-                arrType = cat->getElementType();
+            while (const ConstantArrayType *cat2 = Context.getAsConstantArrayType(arrType)) {
+                totalElements *= cat2->getSize().getZExtValue();
+                arrType = cat2->getElementType();
             }
 
-            // TODO: Should tidy this up
             QualType peeled = arrType;
             while (const auto *pt = peeled->getAs<PointerType>()) {
                 pointerDepth++;
@@ -251,7 +282,6 @@ public:
             }
             underlyingType = peeled;
         } else {
-
             QualType peeled = canonicalType;
             while (const auto *pt = peeled->getAs<PointerType>()) {
                 pointerDepth++;
@@ -260,7 +290,7 @@ public:
             underlyingType = peeled;
         }
 
-        FieldInfo info(field->getNameAsString(), "", Offset);
+        FieldInfo info(field->getNameAsString(), "", offset);
         info.PointerDepth = pointerDepth;
         info.ArraySize = (totalElements > 1 ? totalElements : 0);
         info.IsConst = underlyingType.isConstQualified();
@@ -269,45 +299,48 @@ public:
         QualType finalCanonical = underlyingType.getCanonicalType().getUnqualifiedType();
         std::string cleanName = finalCanonical.getAsString();
 
-        // Ehhhhhhhhh
-        const std::string structPrefix = "struct ";
-        const std::string unionPrefix = "union ";
-        const std::string enumPrefix = "enum ";
-        if (cleanName.compare(0, structPrefix.size(), structPrefix) == 0)
+        static const std::string structPrefix = "struct ";
+        static const std::string unionPrefix  = "union ";
+        static const std::string enumPrefix   = "enum ";
+        if (cleanName.compare(0, structPrefix.size(), structPrefix) == 0) {
             cleanName = cleanName.substr(structPrefix.size());
-        else if (cleanName.compare(0, unionPrefix.size(), unionPrefix) == 0)
+        } else if (cleanName.compare(0, unionPrefix.size(), unionPrefix) == 0) {
             cleanName = cleanName.substr(unionPrefix.size());
-        else if (cleanName.compare(0, enumPrefix.size(), enumPrefix) == 0)
+        } else if (cleanName.compare(0, enumPrefix.size(), enumPrefix) == 0) {
             cleanName = cleanName.substr(enumPrefix.size());
+        }
 
         if (finalCanonical->isRecordType()) {
             if (const RecordType *rt = finalCanonical->getAs<RecordType>()) {
                 const RecordDecl *rd = rt->getDecl();
                 std::string tagName = rd->getNameAsString();
                 if (tagName.empty()) {
-                    if (TypedefNameDecl *tnd = rd->getTypedefNameForAnonDecl())
+                    if (TypedefNameDecl *tnd = rd->getTypedefNameForAnonDecl()) {
                         tagName = tnd->getNameAsString();
+                    }
                 }
                 info.IsStructOrUnion = true;
                 info.StructOrUnionName = tagName;
                 cleanName = tagName;
             }
         }
+
         info.Type = cleanName;
         return info;
     }
 
-private:
-    ASTContext &Context;
-    std::vector<RecordInfo> Results;
-    std::vector<EnumInfo> EnumResults;
-    // I don't think locks were even necessary (this only gets executed for a single compilation unit anyway?)
-    // TODO: remove them
-    std::atomic<size_t> NextTypeID;
-    std::mutex TypeIDMutex;
-    std::unordered_map<std::string, BaseType> BaseTypes;
-    std::unordered_map<size_t, BaseType> TypeIDMap;
-    std::unordered_map<const RecordDecl *, std::vector<std::string> > PendingAliases;
+    template <typename T>
+    void MergePendingAliasesFor(const TagDecl *canonTD, T &target) {
+        auto it = PendingAliases.find(canonTD);
+        if (it != PendingAliases.end()) {
+            for (const auto &alias : it->second) {
+                if (std::find(target.Aliases.begin(), target.Aliases.end(), alias) == target.Aliases.end()) {
+                    target.Aliases.push_back(alias);
+                }
+            }
+            PendingAliases.erase(it);
+        }
+    }
 
     void RegisterBaseTypes() {
         size_t archSize = Context.getTargetInfo().getPointerWidth(LangAS::Default) / 8;
@@ -329,16 +362,23 @@ private:
     }
 
     void RegisterBaseType(const std::string &name, size_t size, bool lockMutex = true) {
-        if (lockMutex)
+        if (lockMutex) {
             std::lock_guard<std::mutex> lock(TypeIDMutex);
+        }
         BaseType newBase(TypeVariant::Base, name, size, NextTypeID++);
         BaseTypes.emplace(name, newBase);
-        TypeIDMap.emplace(newBase.TypeID, newBase);
     }
 
-    void AddToTypeIDMap(const RecordInfo &record) {
-        TypeIDMap.emplace(record.TypeID, record);
-    }
+    ASTContext &Context;
+    std::vector<RecordInfo> Results;
+    std::vector<EnumInfo> EnumResults;
+
+    std::atomic<size_t> NextTypeID;
+    std::mutex TypeIDMutex;
+
+    std::unordered_map<std::string, BaseType> BaseTypes;
+
+    std::unordered_map<const TagDecl*, std::vector<std::string>> PendingAliases;
 };
 
 void ReflectClangVisitor::ReflectNestedFields(const RecordDecl *nestedRD,
@@ -347,14 +387,17 @@ void ReflectClangVisitor::ReflectNestedFields(const RecordDecl *nestedRD,
                                               size_t baseOffset) {
     const ASTRecordLayout &nestedLayout = Context.getASTRecordLayout(nestedRD);
     unsigned nestedIndex = 0;
-    for (const FieldDecl *nestedField: nestedRD->fields()) {
+    for (const FieldDecl *nestedField : nestedRD->fields()) {
         QualType nestedFieldType = nestedField->getType();
-        FieldInfo nestedFieldInfo = CreateFieldInfo(nestedField, nestedFieldType,
-                                                    baseOffset + (nestedLayout.getFieldOffset(nestedIndex) / 8));
+        FieldInfo nestedFieldInfo =
+            CreateFieldInfo(nestedField, nestedFieldType,
+                            baseOffset + (nestedLayout.getFieldOffset(nestedIndex) / 8));
         nestedFieldInfo.Name = prefix + nestedField->getNameAsString();
         record.AddField(nestedFieldInfo);
+
         if (const RecordType *nestedRT = nestedFieldType->getAs<RecordType>()) {
-            if (const RecordDecl *nestedNestedRD = nestedRT->getDecl(); nestedNestedRD->isCompleteDefinition()) {
+            if (const RecordDecl *nestedNestedRD = nestedRT->getDecl();
+                nestedNestedRD->isCompleteDefinition()) {
                 ReflectNestedFields(nestedNestedRD,
                                     prefix + nestedField->getNameAsString() + ".",
                                     record,
@@ -382,34 +425,38 @@ public:
         }
 
         const auto &baseTypesMap = Visitor.GetBaseTypes();
-        const auto &enumResults = Visitor.GetEnumResults();
-        const auto &results = Visitor.GetResults();
+        const auto &enumResults  = Visitor.GetEnumResults();
+        const auto &recResults   = Visitor.GetResults();
+        const size_t archSize    = context.getTargetInfo().getPointerWidth(LangAS::Default) / 8;
 
-        const size_t archSize = context.getTargetInfo().getPointerWidth(LangAS::Default) / 8;
         outFile << "arch " << archSize << "\n";
 
-        for (const auto &pair: baseTypesMap) {
+        for (const auto &pair : baseTypesMap) {
             const BaseType &bt = pair.second;
-            if (bt.Variant != TypeVariant::Base)
+            if (bt.Variant != TypeVariant::Base) {
                 continue;
+            }
             outFile << "base\n";
             outFile << "name " << bt.Name << "\n";
-            for (const auto &alias: bt.Aliases) {
-                if (alias != bt.Name)
+            for (const auto &alias : bt.Aliases) {
+                if (alias != bt.Name) {
                     outFile << "alias " << alias << "\n";
+                }
             }
             outFile << "size " << bt.Size << "\n";
         }
 
-        for (const auto &rec: Visitor.GetResults()) {
-            outFile << (rec.Variant == TypeVariant::Struct ? "struct" : "union") << "\n";
+        for (const auto &rec : recResults) {
+            outFile << ((rec.Variant == TypeVariant::Struct) ? "struct" : "union") << "\n";
             outFile << "name " << rec.Name << "\n";
-            for (const auto &alias: rec.Aliases) {
-                if (alias != rec.Name)
+            for (const auto &alias : rec.Aliases) {
+                if (alias != rec.Name) {
                     outFile << "alias " << alias << "\n";
+                }
             }
             outFile << "size " << rec.Size << "\n";
-            for (const auto &field: rec.Fields) {
+
+            for (const auto &field : rec.Fields) {
                 outFile << "field\n"
                         << "name " << field.Name << "\n"
                         << "type " << (field.IsStructOrUnion ? field.StructOrUnionName : field.Type) << "\n"
@@ -421,18 +468,19 @@ public:
             }
         }
 
-        for (const auto &en: Visitor.GetEnumResults()) {
+        for (const auto &en : enumResults) {
             outFile << "enum\n";
             outFile << "name " << en.Name << "\n";
-            for (const auto &alias: en.Aliases) {
-                if (alias != en.Name)
+            for (const auto &alias : en.Aliases) {
+                if (alias != en.Name) {
                     outFile << "alias " << alias << "\n";
+                }
             }
             outFile << "size " << en.Size << "\n";
-            for (const auto &[fst, snd]: en.Enumerators) {
+            for (const auto &[ename, evalue] : en.Enumerators) {
                 outFile << "enumerator\n";
-                outFile << "ek " << fst << "\n";
-                outFile << "ev " << snd << "\n";
+                outFile << "ek " << ename << "\n";
+                outFile << "ev " << evalue << "\n";
             }
         }
 
@@ -447,9 +495,9 @@ private:
 class ReflectClangPluginAction : public PluginASTAction {
 protected:
     std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI, llvm::StringRef) override {
-        std::string outputFile = CI.getFrontendOpts().OutputFile.substr(0,
-                                                                        CI.getFrontendOpts().OutputFile.find_last_of(
-                                                                            '.')) + ".reflection.dat";
+        std::string outputFile =
+            CI.getFrontendOpts().OutputFile.substr(0,
+               CI.getFrontendOpts().OutputFile.find_last_of('.')) + ".reflection.dat";
         return std::make_unique<ReflectClangConsumer>(CI.getASTContext(), outputFile);
     }
 
