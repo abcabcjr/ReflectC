@@ -46,7 +46,7 @@ bool load_reflection() {
     fclose(file);
     reflect_load_bytes(buffer, true);
 
-    free(buffer);
+    //free(buffer);
 
     return true;
 }
