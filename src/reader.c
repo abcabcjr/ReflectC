@@ -5,6 +5,7 @@
 typedef struct {
     char* data;
     size_t offset;
+    bool copy;
 } reader_t;
 
 uint8_t read_byte(reader_t* reader) {
@@ -27,16 +28,28 @@ bool read_bool(reader_t* reader) {
     return *((bool*)reader->data+reader->offset-1);
 }
 
-char* read_string(reader_t* reader) {
-    size_t offset = reader->offset;
+char* read_c_string(reader_t* reader, const size_t offset) {
+    if (reader->copy) {
+        size_t prev_offset = reader->offset;
+        reader->offset = offset;
 
-    while (reader->data[reader->offset] != 0)
+        while (reader->data[reader->offset] != 0)
+            reader->offset++;
         reader->offset++;
-    reader->offset++;
 
-    // realloc
-    char* str = malloc(reader->offset-offset);
-    memcpy(str, reader->data+offset, reader->offset-offset);
+        // realloc
+        char* str = malloc(reader->offset-offset);
+        memcpy(str, reader->data+offset, reader->offset-offset);
 
-    return str;
+        reader->offset = prev_offset;
+        return str;
+    }
+
+    return reader->data+offset;
+}
+
+char* read_string(reader_t* reader) {
+    size_t offset = read_size_t(reader);
+
+    return read_c_string(reader, offset);
 }

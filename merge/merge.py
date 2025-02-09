@@ -9,8 +9,8 @@ import json
 import struct
 
 type_name_map = {}  # type name -> type data
+global_string_volume = {} # string literal -> relative offset in reflection.dat
 arch = -1           # 8 or 4
-
 
 class BinWriter:
     def __init__(self, size, arch):
@@ -55,7 +55,7 @@ class BinWriter:
 
 
 def parse_reflection_files(root_dir):
-    global arch, type_name_map
+    global arch, type_name_map, global_string_volume, global_string_writer
 
     pattern = os.path.join(root_dir, "**", "*.reflection.dat")
     files = glob.glob(pattern, recursive=True)
@@ -105,6 +105,11 @@ def parse_reflection_files(root_dir):
             arg = " ".join(parts[1:]) if len(parts) > 1 else ""
             if command == "arch":
                 try:
+                    if arch == -1:
+                        global global_string_volume, global_string_writer
+                        global_string_writer = BinWriter(1000000, int(arg))
+                        global_string_volume = {}
+
                     arch = int(arg)
                 except Exception:
                     pass
@@ -126,6 +131,9 @@ def parse_reflection_files(root_dir):
                 flush_current_field_data()
                 is_in_field_mode = True
             elif command == "ek":
+                if arg not in global_string_volume:
+                    global_string_volume[arg] = global_string_writer.offset + arch*2
+                    global_string_writer.write_c_string(arg)
                 current_field_data["name"] = arg
             elif command == "ev":
                 try:
@@ -133,13 +141,23 @@ def parse_reflection_files(root_dir):
                 except Exception:
                     current_field_data["value"] = 0
             elif command == "name":
+                if arg not in global_string_volume:
+                    global_string_volume[arg] = global_string_writer.offset + arch*2
+                    global_string_writer.write_c_string(arg)
+
                 if is_in_field_mode:
                     current_field_data["name"] = arg
                 else:
                     current_data["name"] = arg
             elif command == "alias":
+                if arg not in global_string_volume:
+                    global_string_volume[arg] = global_string_writer.offset + arch*2
+                    global_string_writer.write_c_string(arg)
                 current_data.setdefault("aliases", []).append(arg)
             elif command == "type":
+                if arg not in global_string_volume:
+                    global_string_volume[arg] = global_string_writer.offset + arch*2
+                    global_string_writer.write_c_string(arg)
                 current_field_data["type"] = arg
             elif command == "offset":
                 try:
@@ -170,7 +188,7 @@ def parse_reflection_files(root_dir):
 
 
 def write_reflection_dat(output_file, output_asm_file):
-    global arch, type_name_map
+    global arch, type_name_map, global_string_volume, global_string_writer
 
     type_id = 1
     for name, data in type_name_map.items():
@@ -186,18 +204,24 @@ def write_reflection_dat(output_file, output_asm_file):
     writer = BinWriter(1000000, arch)
     object_types = {"base": 1, "struct": 2, "union": 3, "enum": 4}
 
+    head_writer = BinWriter(arch*2, arch)
+
+    # header
+    head_writer.write_arch_size(arch * 2) # location of global string literal volume
+    head_writer.write_arch_size(arch * 2 + global_string_writer.offset) # location of actual table data
+
     writer.write_arch_size(len(type_name_map))
 
     for type_data in type_name_map.values():
         if type_data["type"] == "base":
             writer.write_arch_size(type_data["id"])
             writer.write_uint8(1)  # base type code
-            writer.write_c_string(type_data["name"])
+            writer.write_arch_size(global_string_volume[type_data["name"]])
             writer.write_arch_size(type_data.get("size", 0))
         else:
             writer.write_arch_size(type_data["id"])
             writer.write_uint8(object_types.get(type_data["type"], 0))
-            writer.write_c_string(type_data["name"])
+            writer.write_arch_size(global_string_volume[type_data["name"]])
             writer.write_arch_size(type_data.get("size", 0))
             field_count_offset = writer.offset
             writer.write_arch_size(0)  # placeholder for field count
@@ -206,7 +230,7 @@ def write_reflection_dat(output_file, output_asm_file):
                 if type_data["type"] != "enum":
                     if field.get("struct", False) and field.get("type", "") not in type_name_map:
                         continue
-                    writer.write_c_string(field.get("name", ""))
+                    writer.write_arch_size(global_string_volume[field.get("name", "")])
                     writer.write_bool(field.get("const", False))
                     writer.write_uint32(field.get("pdepth", 0))
                     writer.write_arch_size(field.get("offset", 0))
@@ -216,7 +240,7 @@ def write_reflection_dat(output_file, output_asm_file):
                     writer.write_arch_size(ref_id)
                     field_count += 1
                 else:
-                    writer.write_c_string(field.get("name", ""))
+                    writer.write_arch_size(global_string_volume[field.get("name", "")])
                     writer.write_arch_size(field.get("value", 0))
                     field_count += 1
             current_offset = writer.offset
@@ -229,6 +253,8 @@ def write_reflection_dat(output_file, output_asm_file):
             writer.offset = current_offset
 
     with open(output_file, "wb") as f:
+        f.write(head_writer.data[:head_writer.offset])
+        f.write(global_string_writer.data[:global_string_writer.offset])
         f.write(writer.data[:writer.offset])
 
     # For linking reflection.dat directly with binary
@@ -245,11 +271,13 @@ def write_reflection_dat(output_file, output_asm_file):
         f.write("    .global _reflection_dat_end\n")
         f.write("_reflection_dat_start:\n")
 
-        for i, byte in enumerate(writer.data[:writer.offset]):
+        full_data = head_writer.data[:head_writer.offset] + global_string_writer.data[:global_string_writer.offset] + writer.data[:writer.offset]
+
+        for i, byte in enumerate(full_data):
             if i % 12 == 0:
                 f.write("\n    .byte ")
             f.write(f"0x{byte:02x}")
-            if i % 12 != 11 and (i != writer.offset - 1):
+            if i % 12 != 11 and (i != len(full_data) - 1):
                 f.write(", ")
 
         f.write("\n_reflection_dat_end:\n")
