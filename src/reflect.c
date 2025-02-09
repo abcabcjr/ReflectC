@@ -171,10 +171,10 @@ void reflect_load_bytes(char* reflection_metadata) {
 // For linked reflection.dat use
 
 #ifdef __APPLE__
-extern __attribute__((weak)) const char reflection_dat_start[];
+extern __attribute__((weak)) const char reflection_dat_start[] = "";
 #define REFLECTION_DATA_SYMBOL reflection_dat_start
 #else
-extern __attribute__((weak)) const char _reflection_dat_start[];
+extern __attribute__((weak)) const char _reflection_dat_start[] = "";
 #define REFLECTION_DATA_SYMBOL _reflection_dat_start
 #endif
 
