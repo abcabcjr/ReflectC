@@ -1,0 +1,2 @@
+add_subdirectory(inlinetest)
+add_subdirectory(sample)

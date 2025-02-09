@@ -1,0 +1,39 @@
+# Ignore compiled object files and binaries
+*.o
+*.a
+*.so
+*.exe
+*.out
+*.dylib
+
+# Ignore dependency files
+*.d
+
+# Ignore debug and profiling files
+*.gcda
+*.gcno
+*.gcov
+
+# Ignore build directories
+build
+bin
+obj
+cmake-build-debug
+cmake-build-release
+
+# Ignore editor and OS-specific files
+*~
+*.swp
+.DS_Store
+Thumbs.db
+
+# Ignore Makefile artifacts
+Makefile.in
+Makefile.dep
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.bak
+
+.idea
