@@ -9,7 +9,7 @@ add_custom_command(
         OUTPUT
         "${CMAKE_CURRENT_BINARY_DIR}/reflection.dat.o"
         COMMAND
-        python3 "${CMAKE_SOURCE_DIR}/merge/merge.py" ${CMAKE_BINARY_DIR} ./
+        python3 "${CMAKE_SOURCE_DIR}/merge/merge.py" ${CMAKE_CURRENT_BINARY_DIR} ./
 
         COMMAND
         "${CMAKE_C_COMPILER}" -c

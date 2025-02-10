@@ -52,7 +52,7 @@ The simplest build setup involves running the type info merge script post build 
 add_custom_command(
         TARGET sample
         POST_BUILD
-        COMMAND python3 "${CMAKE_SOURCE_DIR}/merge/merge.py" ${CMAKE_BINARY_DIR} ./
+        COMMAND python3 "${CMAKE_SOURCE_DIR}/merge/merge.py" ${CMAKE_CURRENT_BINARY_DIR} ./
 )
 ```
 
