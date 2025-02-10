@@ -33,7 +33,17 @@ message(STATUS "Detected Clang Targets: ${AUTO_CLANG_LIBS}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-set(SOURCE_FILES ReflectClangPlugin.cpp)
+set(SOURCE_FILES
+        ReflectionTypes.cpp
+        ReflectionTypes.hpp
+        ReflectVisitor.cpp
+        ReflectVisitor.hpp
+        ReflectionDataSerializer.cpp
+        ReflectionDataSerializer.hpp
+        ReflectConsumer.cpp
+        ReflectConsumer.hpp
+        ReflectPluginAction.cpp
+        ReflectPluginAction.hpp)
 
 add_library(ReflectClangPlugin SHARED ${SOURCE_FILES})
 
