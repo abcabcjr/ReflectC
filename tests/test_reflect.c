@@ -44,11 +44,31 @@ struct ReflectTypedefAliasTest {
 
 typedef struct ReflectTypedefAliasTest reflect_typedef_alias_test;
 
+typedef struct {
+    struct {
+        int a;
+        int b;
+        struct {
+            struct {
+                struct {
+                    int e;
+                };
+            };
+        } double_nest;
+    };
+    struct {
+        int a;
+        int b;
+    } nested;
+    int c;
+} anon_test_t;
+
 /* We reference them in code so the linker won't discard them. */
 static struct_test_t    global_test_s;
 static struct_2d_t      global_2d_struct;
 static union_test_t     global_u;
 static reflect_typedef_alias_test reflect_type_alias;
+static anon_test_t anon_test_s;
 
 void test_type_info() {
     const type_info_t* int_type = reflect_type_info_from_name("int");
@@ -261,6 +281,33 @@ void test_aliases() {
     printf("✅ test_aliases passed!\n");
 }
 
+void test_anon() {
+    const type_info_t* anon = reflect_type_info_from_name("anon_test_t");
+
+    const field_info_t* it  = reflect_field_info_iter_begin(anon);
+    const field_info_t* end = reflect_field_info_iter_end(anon);
+
+    int found_count = 0;
+
+    for (; it != end; ++it) {
+        printf(" anon_test_t field '%s': offset=%zu arr_size=%zu\n",
+               it->name, it->offset, it->arr_size);
+
+        if (strcmp(it->name, "a") == 0 ||
+            strcmp(it->name, "b") == 0 ||
+            strcmp(it->name, "nested.a") == 0 ||
+            strcmp(it->name, "nested.b") == 0 ||
+            strcmp(it->name, "double_nest.e") == 0 ||
+            strcmp(it->name, "c") == 0) {
+                found_count++;
+            }
+    }
+
+    assert(found_count == 6);
+
+    printf("✅ test_anon passed!\n");
+}
+
 int main() {
     reflect_load();
 
@@ -276,6 +323,7 @@ int main() {
     test_union_reflection();
 
     test_aliases();
+    test_anon();
 
     printf("🎉 All tests passed!\n");
     return 0;

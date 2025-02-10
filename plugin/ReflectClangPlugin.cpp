@@ -144,7 +144,8 @@ public:
                 if (const RecordType *RT = fieldType->getAs<RecordType>()) {
                     RecordDecl *nestedRD = RT->getDecl();
                     if (nestedRD->isCompleteDefinition()) {
-                        ReflectNestedFields(nestedRD, field->getNameAsString() + ".",
+                        auto name = field->getNameAsString();
+                        ReflectNestedFields(nestedRD, name.empty() ? "" : (name + "."),
                                             record, layout.getFieldOffset(index) / 8);
                     }
                 }
@@ -398,8 +399,12 @@ void ReflectClangVisitor::ReflectNestedFields(const RecordDecl *nestedRD,
         if (const RecordType *nestedRT = nestedFieldType->getAs<RecordType>()) {
             if (const RecordDecl *nestedNestedRD = nestedRT->getDecl();
                 nestedNestedRD->isCompleteDefinition()) {
+
+                // check if record is anon
+                auto newPrefix = nestedField->getNameAsString().empty() ? prefix : (prefix + nestedField->getNameAsString() + ".");
+
                 ReflectNestedFields(nestedNestedRD,
-                                    prefix + nestedField->getNameAsString() + ".",
+                                    newPrefix,
                                     record,
                                     baseOffset + (nestedLayout.getFieldOffset(nestedIndex) / 8));
             }
