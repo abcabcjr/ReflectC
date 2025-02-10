@@ -34,11 +34,11 @@ static hashtable_t type_hash_table = {
     .capacity = 0
 };
 
-type_info_internal* get_internal_from_type_info(const type_info_t* type_info) {
+static type_info_internal* get_internal_from_type_info(const type_info_t* type_info) {
     return (type_info_internal*)((char*)type_info - REFLECT_TYPE_INFO_INTERNAL_SIZE);
 }
 
-type_info_t* add_base_type_info(const char* name, const size_t id, const size_t size) {
+static type_info_t* add_base_type_info(const char* name, const size_t id, const size_t size) {
     type_table[id].type.id = id;
     type_table[id].type.name = name;
     type_table[id].type.size = size;
@@ -54,7 +54,7 @@ type_info_t* add_base_type_info(const char* name, const size_t id, const size_t 
     return &type_table[id].type;
 }
 
-type_info_t* add_struct_type_info(const char* name, const size_t id, const size_t size, uint8_t variant, const size_t field_count) {
+static type_info_t* add_struct_type_info(const char* name, const size_t id, const size_t size, uint8_t variant, const size_t field_count) {
     type_table[id].type.id = id;
     type_table[id].type.name = name;
     type_table[id].type.size = size;
@@ -71,7 +71,7 @@ type_info_t* add_struct_type_info(const char* name, const size_t id, const size_
     return &type_table[id].type;
 }
 
-type_info_t* add_enum_type_info(const char* name, const size_t id, const size_t size, const size_t field_count) {
+static type_info_t* add_enum_type_info(const char* name, const size_t id, const size_t size, const size_t field_count) {
     type_table[id].type.id = id;
     type_table[id].type.name = name;
     type_table[id].type.size = size;
@@ -88,7 +88,7 @@ type_info_t* add_enum_type_info(const char* name, const size_t id, const size_t 
     return &type_table[id].type;
 }
 
-void add_struct_field_type(type_info_t* struct_type, const char* field_name, const size_t field_type, const size_t size, const size_t offset, const uint32_t ptr_depth, const bool is_const) {
+static void add_struct_field_type(type_info_t* struct_type, const char* field_name, const size_t field_type, const size_t size, const size_t offset, const uint32_t ptr_depth, const bool is_const) {
     const field_info_t field_info = {
         .name = field_name,
         .arr_size = size,
@@ -106,7 +106,7 @@ void add_struct_field_type(type_info_t* struct_type, const char* field_name, con
     });
 }
 
-void add_enum_field_type(type_info_t* enum_type, const char* field_name, size_t value) {
+static void add_enum_field_type(type_info_t* enum_type, const char* field_name, size_t value) {
     const enum_field_info_t field_info = {
         .name = field_name,
         .value = value
@@ -120,7 +120,7 @@ void add_enum_field_type(type_info_t* enum_type, const char* field_name, size_t 
     });
 }
 
-void add_type_alias(const size_t type_id, const char* alias_name) {
+static void add_type_alias(const size_t type_id, const char* alias_name) {
     hashtable_insert(&type_hash_table, &(hash_t){
         .name = alias_name,
         .id = type_id
@@ -248,6 +248,9 @@ void reflect_free(void* ptr, void* allocator, void (*free_func)(void*, void*)) {
         return;
 
     reflect_type_header_t* header = ((reflect_type_header_t*)ptr) - 1;
+
+    if (header->magic != REFLECT_DYNAMIC_ALLOC_MAGIC)
+        return;
 
     if (free_func == NULL)
         free(header);
