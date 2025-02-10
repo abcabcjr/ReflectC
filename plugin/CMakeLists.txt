@@ -38,21 +38,3 @@ set(SOURCE_FILES ReflectClangPlugin.cpp)
 add_library(ReflectClangPlugin SHARED ${SOURCE_FILES})
 
 target_link_libraries(ReflectClangPlugin PRIVATE ${AUTO_CLANG_LIBS})
-
-find_package(ZLIB REQUIRED)
-find_package(zstd REQUIRED)
-
-target_include_directories(ReflectClangPlugin PRIVATE
-        ${ZLIB_INCLUDE_DIRS}
-        ${ZSTD_INCLUDE_DIRS}
-)
-
-target_link_directories(ReflectClangPlugin PRIVATE
-        ${ZLIB_LIBRARY_DIRS}
-        ${ZSTD_LIBRARY_DIRS}
-)
-
-target_link_libraries(ReflectClangPlugin PRIVATE
-        ZLIB::ZLIB
-        zstd
-)
