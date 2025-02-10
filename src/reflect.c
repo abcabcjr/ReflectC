@@ -120,6 +120,13 @@ void add_enum_field_type(type_info_t* enum_type, const char* field_name, size_t 
     });
 }
 
+void add_type_alias(const size_t type_id, const char* alias_name) {
+    hashtable_insert(&type_hash_table, &(hash_t){
+        .name = alias_name,
+        .id = type_id
+    });
+}
+
 // copy - will allocate new strings, recommended if reading yourself from a file so you can free buffer
 void reflect_load_bytes(char* reflection_metadata, bool copy) {
     if (is_init)
@@ -147,30 +154,37 @@ void reflect_load_bytes(char* reflection_metadata, bool copy) {
 
         if (variant == Base) {
             add_base_type_info(name, id, size);
-        } else if (variant == Struct || variant == Union) {
+        } else {
             const size_t field_count = read_size_t(&reader);
-            type_info_t* struct_type = add_struct_type_info(name, id, size, variant, field_count);
 
-            for (size_t j = 0; j < field_count; j++) {
-                const char* field_name = read_string(&reader);
-                const bool is_const = read_bool(&reader);
-                const uint32_t ptr_depth = read_uint32_t(&reader);
-                const size_t offset = read_size_t(&reader);
-                const size_t field_size = read_size_t(&reader);
-                const size_t field_type = read_size_t(&reader);
+            if (variant == Struct || variant == Union) {
+                type_info_t* struct_type = add_struct_type_info(name, id, size, variant, field_count);
 
-                add_struct_field_type(struct_type, field_name, field_type, field_size, offset, ptr_depth, is_const);
+                for (size_t j = 0; j < field_count; j++) {
+                    const char* field_name = read_string(&reader);
+                    const bool is_const = read_bool(&reader);
+                    const uint32_t ptr_depth = read_uint32_t(&reader);
+                    const size_t offset = read_size_t(&reader);
+                    const size_t field_size = read_size_t(&reader);
+                    const size_t field_type = read_size_t(&reader);
+
+                    add_struct_field_type(struct_type, field_name, field_type, field_size, offset, ptr_depth, is_const);
+                }
+            } else if (variant == Enum) {
+                type_info_t* enum_type = add_enum_type_info(name, id, size, field_count);
+
+                for (size_t j = 0; j < field_count; j++) {
+                    const char* field_name = read_string(&reader);
+                    const size_t value = read_size_t(&reader);
+
+                    add_enum_field_type(enum_type, field_name, value);
+                }
             }
-        } else if (variant == Enum) {
-            const size_t field_count = read_size_t(&reader);
-            type_info_t* enum_type = add_enum_type_info(name, id, size, field_count);
 
-            for (size_t j = 0; j < field_count; j++) {
-                const char* field_name = read_string(&reader);
-                const size_t value = read_size_t(&reader);
+            const size_t alias_count = read_size_t(&reader);
 
-                add_enum_field_type(enum_type, field_name, value);
-            }
+            for (size_t j = 0; j < alias_count; j++)
+                add_type_alias(id, read_string(&reader));
         }
     }
 }

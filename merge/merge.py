@@ -252,6 +252,11 @@ def write_reflection_dat(output_file, output_asm_file):
                                  field_count_offset, field_count)
             writer.offset = current_offset
 
+            # aliases
+            writer.write_arch_size(len(type_data.get("aliases", [])))
+            for alias in type_data.get("aliases", []):
+                writer.write_arch_size(global_string_volume[alias])
+
     with open(output_file, "wb") as f:
         f.write(head_writer.data[:head_writer.offset])
         f.write(global_string_writer.data[:global_string_writer.offset])
