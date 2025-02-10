@@ -19,7 +19,7 @@ typedef struct {
     size_t capacity;
 } hashtable_t;
 
-uint32_t hash_fnv1a(const char *key) {
+static uint32_t hash_fnv1a(const char *key) {
     uint32_t hash = 2166136261u;
     while (*key) {
         hash ^= (uint8_t)(*key++);
@@ -28,7 +28,7 @@ uint32_t hash_fnv1a(const char *key) {
     return hash;
 }
 
-hashtable_t hashtable_create(const size_t capacity) {
+static hashtable_t hashtable_create(const size_t capacity) {
     const hashtable_t ht = {
         .capacity = capacity,
         .data = calloc(capacity, sizeof(hash_bucket_t)),
@@ -37,7 +37,7 @@ hashtable_t hashtable_create(const size_t capacity) {
     return ht;
 }
 
-size_t hashtable_get(const hashtable_t *ht, const char *key) {
+static size_t hashtable_get(const hashtable_t *ht, const char *key) {
     const uint32_t hash_key = hash_fnv1a(key) % ht->capacity;
 
     hash_bucket_t* bucket = ht->data + hash_key;
@@ -55,7 +55,7 @@ size_t hashtable_get(const hashtable_t *ht, const char *key) {
     return -1;
 }
 
-void hashtable_insert(const hashtable_t* ht, const hash_t* value) {
+static void hashtable_insert(const hashtable_t* ht, const hash_t* value) {
     const uint32_t hash_key = hash_fnv1a(value->name) % ht->capacity;
 
     if (ht->data[hash_key].data.name == NULL) {
