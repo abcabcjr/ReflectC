@@ -92,6 +92,10 @@ int main() {
     int a = *(int*)reflect_get_field(instance, "a"); // get the value of a field by name
     int b = *(int*)reflect_get_field_manual(instance, "b", struct_type); // works for structs not allocated using reflect_alloc() too!
 
+    // get info on fields
+    field_info_t* field_type = reflect_get_field_type(struct_type, "a")
+    printf("%s\n", field_type->type_ptr->name)
+
     for (const field_info_t* field = reflect_field_info_iter_begin(struct_type); field != reflect_field_info_iter_end(struct_type); field++) {
         // Iterate through the fields of a struct
         // Nested fields are also included (e.g. nested.a.b)
