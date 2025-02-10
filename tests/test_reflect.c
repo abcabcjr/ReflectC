@@ -38,10 +38,17 @@ typedef union {
     char c[8];
 } union_test_t;
 
+struct ReflectTypedefAliasTest {
+    int a;
+};
+
+typedef struct ReflectTypedefAliasTest reflect_typedef_alias_test;
+
 /* We reference them in code so the linker won't discard them. */
 static struct_test_t    global_test_s;
 static struct_2d_t      global_2d_struct;
 static union_test_t     global_u;
+static reflect_typedef_alias_test reflect_type_alias;
 
 void test_type_info() {
     const type_info_t* int_type = reflect_type_info_from_name("int");
@@ -244,6 +251,16 @@ void test_union_reflection() {
     printf("✅ test_union_reflection passed!\n");
 }
 
+void test_aliases() {
+    const type_info_t* first = reflect_type_info_from_name("reflect_typedef_alias_test");
+    const type_info_t* second = reflect_type_info_from_name("ReflectTypedefAliasTest");
+
+    assert(first != NULL && first == second);
+    assert(strcmp(first->name, "ReflectTypedefAliasTest") == 0);
+
+    printf("✅ test_aliases passed!\n");
+}
+
 int main() {
     reflect_load();
 
@@ -257,6 +274,8 @@ int main() {
 
     test_enum_field_iteration();
     test_union_reflection();
+
+    test_aliases();
 
     printf("🎉 All tests passed!\n");
     return 0;
