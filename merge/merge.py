@@ -107,7 +107,7 @@ def parse_reflection_files(root_dir):
                 try:
                     if arch == -1:
                         global global_string_volume, global_string_writer
-                        global_string_writer = BinWriter(1000000, int(arg))
+                        global_string_writer = BinWriter(10000000, int(arg))
                         global_string_volume = {}
 
                     arch = int(arg)
@@ -201,7 +201,7 @@ def write_reflection_dat(output_file, output_asm_file):
         json.dump(type_name_map, f, indent=4)
 
     # Hmm should probably not hardcode this
-    writer = BinWriter(1000000, arch)
+    writer = BinWriter(10000000, arch)
     object_types = {"base": 1, "struct": 2, "union": 3, "enum": 4}
 
     head_writer = BinWriter(arch*2, arch)
