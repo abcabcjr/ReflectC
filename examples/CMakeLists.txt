@@ -1,3 +1,5 @@
 add_subdirectory(inlinetest)
 add_subdirectory(sample)
-add_subdirectory(benchmark)
+
+# don't build it for now
+# add_subdirectory(benchmark)
