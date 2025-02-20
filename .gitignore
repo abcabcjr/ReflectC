@@ -37,3 +37,6 @@ Makefile.dep
 *.bak
 
 .idea
+.zed
+.cache
+.ropeproject

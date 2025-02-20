@@ -3,6 +3,8 @@ project(ReflectClangPlugin)
 
 cmake_policy(SET CMP0144 NEW)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 

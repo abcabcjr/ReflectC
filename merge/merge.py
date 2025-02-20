@@ -187,7 +187,7 @@ def parse_reflection_files(root_dir):
         flush_current_data()
 
 
-def write_reflection_dat(output_file, output_asm_file):
+def write_reflection_dat(output_file, output_asm_file, output_c_file):
     global arch, type_name_map, global_string_volume, global_string_writer
 
     type_id = 1
@@ -292,6 +292,21 @@ def write_reflection_dat(output_file, output_asm_file):
         f.write("    .section .note.GNU-stack,\"\",@progbits\n")
         f.write("#endif\n")
         f.write("#endif\n")
+        
+    with open(output_c_file, "w") as f:
+        f.write("const unsigned char _reflection_dat_start[] = {\n")
+    
+        for i, byte in enumerate(full_data):
+            if i % 12 == 0:
+                f.write("    ")
+            f.write(f"0x{byte:02x}")
+            if i != len(full_data) - 1:
+                f.write(", ")
+            if (i + 1) % 12 == 0:
+                f.write("\n")
+        if len(full_data) % 12 != 0:
+            f.write("\n")
+        f.write("};\n\n")
 
 
 def main():
@@ -306,7 +321,8 @@ def main():
     parse_reflection_files(root_dir)
     output_file = os.path.join(out_dir, "reflection.dat")
     output_asm_file = os.path.join(out_dir, "reflection.dat.S")
-    write_reflection_dat(output_file, output_asm_file)
+    output_c_file = os.path.join(out_dir, "reflection.dat.c")
+    write_reflection_dat(output_file, output_asm_file, output_c_file)
 
 
 if __name__ == "__main__":

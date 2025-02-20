@@ -6,6 +6,8 @@ set(CMAKE_C_STANDARD 99)
 
 include_directories(include)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_library(reflect
     src/reflect.c
 )

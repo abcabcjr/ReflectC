@@ -21,9 +21,11 @@ typedef struct {
 
 static uint32_t hash_fnv1a(const char *key) {
     uint32_t hash = 2166136261u;
-    while (*key) {
-        hash ^= (uint8_t)(*key++);
+    size_t i = 0;
+    while (key[i]) {
+        hash ^= (uint8_t)key[i];;
         hash *= 16777619u;
+        i++;
     }
     return hash;
 }

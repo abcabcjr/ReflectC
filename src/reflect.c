@@ -27,12 +27,12 @@ typedef struct {
     type_info_t type;
 } type_info_internal;
 
-static bool is_init = false;
 static type_info_internal* type_table = NULL;
 static hashtable_t type_hash_table = {
     .data = NULL,
     .capacity = 0
 };
+static bool is_init = false;
 
 static type_info_internal* get_internal_from_type_info(const type_info_t* type_info) {
     return (type_info_internal*)((char*)type_info - REFLECT_TYPE_INFO_INTERNAL_SIZE);
@@ -345,4 +345,9 @@ enum_field_info_t* reflect_enum_info_iter_end(const type_info_t* enum_type) {
     }
 
     return get_internal_from_type_info(enum_type)->enum_fields + enum_type->field_count;
+}
+
+/* WebAssembly hotreloading by copying state */
+void* reflect_hotreload_get_state_ptr() {
+    return &type_table;
 }

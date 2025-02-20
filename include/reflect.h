@@ -61,3 +61,6 @@ field_info_t* reflect_field_info_iter_end(const type_info_t* type_info);
 const size_t* reflect_get_enum_value(const type_info_t *enum_type, const char *field_name);
 enum_field_info_t* reflect_enum_info_iter_begin(const type_info_t* enum_type);
 enum_field_info_t* reflect_enum_info_iter_end(const type_info_t* enum_type);
+
+/* WebAssembly hotreloading by copying state */
+void* reflect_hotreload_get_state_ptr();
