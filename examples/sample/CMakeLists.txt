@@ -7,5 +7,5 @@ target_link_libraries(sample PRIVATE reflect)
 add_custom_command(
         TARGET sample
         POST_BUILD
-        COMMAND python3 "${CMAKE_SOURCE_DIR}/merge/merge.py" ${CMAKE_CURRENT_BINARY_DIR} ./
+        COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/../../merge/merge.py" ${CMAKE_CURRENT_BINARY_DIR} ./
 )

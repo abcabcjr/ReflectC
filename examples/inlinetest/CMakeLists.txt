@@ -9,7 +9,7 @@ add_custom_command(
         OUTPUT
         "${CMAKE_CURRENT_BINARY_DIR}/reflection.dat.o"
         COMMAND
-        python3 "${CMAKE_SOURCE_DIR}/merge/merge.py" ${CMAKE_CURRENT_BINARY_DIR} ./
+        python3 "${CMAKE_CURRENT_SOURCE_DIR}/../../merge/merge.py" ${CMAKE_CURRENT_BINARY_DIR} ./
 
         COMMAND
         "${CMAKE_C_COMPILER}" -c
@@ -17,7 +17,7 @@ add_custom_command(
         -o "reflection.dat.o"
         DEPENDS
         $<TARGET_OBJECTS:inline_project>
-        "${CMAKE_SOURCE_DIR}/merge/merge.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../merge/merge.py"
         WORKING_DIRECTORY
         "${CMAKE_CURRENT_BINARY_DIR}"
         COMMENT

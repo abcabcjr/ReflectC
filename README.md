@@ -40,7 +40,7 @@ cmake --build .
 **Loading the plugin**
 
 ```cmake
-set(PLUGIN_PATH "${CMAKE_SOURCE_DIR}/plugin/build/libReflectClangPlugin.${PLUGIN_EXT}")
+set(PLUGIN_PATH "<path to plugin>/libReflectClangPlugin.XXX")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -load -Xclang ${PLUGIN_PATH} -Xclang -add-plugin -Xclang reflect-clang-plugin")
 ```
 

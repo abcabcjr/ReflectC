@@ -18,15 +18,16 @@ target_include_directories(reflect INTERFACE
 )
 
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    if (APPLE)
+    if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
         set(PLUGIN_EXT "dylib")
-    elseif (WIN32)
+    elseif (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
         set(PLUGIN_EXT "dll")
     else ()
+        message(STATUS "Host System Name: ${CMAKE_HOST_SYSTEM_NAME}")
         set(PLUGIN_EXT "so")
     endif ()
 
-    set(PLUGIN_PATH "${CMAKE_SOURCE_DIR}/plugin/build/libReflectClangPlugin.${PLUGIN_EXT}")
+    set(PLUGIN_PATH "${CMAKE_CURRENT_SOURCE_DIR}/plugin/build/libReflectClangPlugin.${PLUGIN_EXT}")
 
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -load -Xclang ${PLUGIN_PATH} -Xclang -add-plugin -Xclang reflect-clang-plugin")
 else()

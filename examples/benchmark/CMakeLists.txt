@@ -13,7 +13,7 @@ add_custom_command(
         -o "reflection.dat.o"
         DEPENDS
         $<TARGET_OBJECTS:benchmark_project>
-        "${CMAKE_SOURCE_DIR}/merge/merge.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../merge/merge.py"
         WORKING_DIRECTORY
         "${CMAKE_CURRENT_BINARY_DIR}"
         COMMENT
